@@ -148,7 +148,7 @@ export function areAllParticipantsReady(sessionId: string): boolean {
     return false
   }
 
-  return Array.from(session.participants.values()).every((p) => p.ready)
+  return Array.from(session.participants.values()).every((p: Participant) => p.ready)
 }
 
 export function startSession(sessionId: string): boolean {
