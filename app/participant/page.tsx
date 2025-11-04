@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 
 interface SessionInfo {
@@ -8,7 +8,7 @@ interface SessionInfo {
   selectedPositions?: number[]
 }
 
-export default function ParticipantPage() {
+function ParticipantPageContent() {
   const searchParams = useSearchParams()
   const sessionId = searchParams?.get("sessionId") || ""
   const [name, setName] = useState("")
@@ -229,5 +229,21 @@ export default function ParticipantPage() {
         </div>
       </div>
     </main>
+  )
+}
+
+export default function ParticipantPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-gradient-to-b from-green-50 to-emerald-100 p-8">
+          <div className="max-w-2xl mx-auto text-center">
+            <p className="text-gray-600">読み込み中...</p>
+          </div>
+        </main>
+      }
+    >
+      <ParticipantPageContent />
+    </Suspense>
   )
 }
