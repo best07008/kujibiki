@@ -30,6 +30,7 @@ export default function ParticipantSessionPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [markingReady, setMarkingReady] = useState(false)
+  const [autoReadyDone, setAutoReadyDone] = useState(false)
 
   useEffect(() => {
     let isMounted = true
@@ -129,8 +130,50 @@ export default function ParticipantSessionPage() {
     }
   }
 
-  // Auto mark ready removed - user must click button manually
-  // This allows better error handling and user control
+  // ページロード完了時に自動的に準備完了にする
+  useEffect(() => {
+    const markReady = async () => {
+      if (!loading && !ready && !autoReadyDone && !markingReady) {
+        setAutoReadyDone(true)
+        setMarkingReady(true)
+        try {
+          console.log(`[AutoReady] Marking ready for participant ${participantId} in session ${sessionId}`)
+          const response = await fetch(`/api/session/${sessionId}/ready`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ participantId }),
+          })
+
+          console.log(`[AutoReady] Response status: ${response.status}`)
+
+          if (response.ok) {
+            setReady(true)
+          } else {
+            const errorData = await response.json()
+            console.error(`[AutoReady] Error response:`, errorData)
+            setError("準備完了に失敗しました")
+            // Retry after 2 seconds
+            setTimeout(() => {
+              setAutoReadyDone(false)
+              setMarkingReady(false)
+            }, 2000)
+          }
+        } catch (err) {
+          console.error(`[AutoReady] Catch error:`, err)
+          setError(err instanceof Error ? err.message : "エラーが発生しました")
+          // Retry after 2 seconds
+          setTimeout(() => {
+            setAutoReadyDone(false)
+            setMarkingReady(false)
+          }, 2000)
+        } finally {
+          setMarkingReady(false)
+        }
+      }
+    }
+
+    markReady()
+  }, [loading, ready, autoReadyDone, sessionId, participantId])
 
   if (loading) {
     return (
