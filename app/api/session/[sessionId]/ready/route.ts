@@ -1,4 +1,4 @@
-import { markParticipantReady, getSession } from "@/lib/session-manager"
+import { markParticipantReady } from "@/lib/session-manager"
 import { NextRequest, NextResponse } from "next/server"
 
 export async function POST(

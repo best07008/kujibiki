@@ -1,4 +1,4 @@
-import { joinSession, getSession } from "@/lib/session-manager"
+import { joinSession } from "@/lib/session-manager"
 import { NextRequest, NextResponse } from "next/server"
 
 export async function POST(
