@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npm run lint:*)",
+      "Bash(curl:*)",
+      "Bash(for i in {1..5})",
+      "Bash(do curl -s -X POST http://localhost:3001/api/session/1SB20Q/join -H \"Content-Type: application/json\" -d \"{\"\"name\"\":\"\"参加者$i\"\",\"\"position\"\":$i}\")",
+      "Bash(jq:*)",
+      "Bash(node test-30-participants.js:*)",
+      "Bash(node:*)",
+      "Bash(cat:*)",
+      "Bash(tree:*)",
+      "Bash(lsof:*)",
+      "Bash(awk:*)",
+      "Bash(xargs kill:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
