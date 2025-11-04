@@ -12,12 +12,12 @@ interface KVStoreInterface {
 // In-memory implementation for local development
 class InMemoryKVStore implements KVStoreInterface {
   private store = new Map<string, { value: any; expiry?: number }>()
-  private cleanupInterval: NodeJS.Timeout | null = null
+  private _cleanupInterval: NodeJS.Timeout | null = null
 
   constructor() {
     // Cleanup expired entries every 5 minutes
     if (typeof global !== 'undefined') {
-      this.cleanupInterval = setInterval(() => {
+      this._cleanupInterval = setInterval(() => {
         const now = Date.now()
         for (const [key, { expiry }] of this.store.entries()) {
           if (expiry && expiry < now) {
@@ -25,6 +25,12 @@ class InMemoryKVStore implements KVStoreInterface {
           }
         }
       }, 300000)
+    }
+  }
+
+  destroy() {
+    if (this._cleanupInterval) {
+      clearInterval(this._cleanupInterval)
     }
   }
 
