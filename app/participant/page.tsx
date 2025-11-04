@@ -30,21 +30,48 @@ function ParticipantPageContent() {
   }, [participantId, sessionId])
 
   useEffect(() => {
-    // セッション情報を取得
+    // セッション情報を取得（リトライロジック付き）
     const fetchSessionInfo = async () => {
-      try {
-        const response = await fetch(`/api/session/${sessionId}`)
-        if (response.ok) {
-          const data = await response.json()
-          setSessionInfo(data)
-        } else {
-          setError("セッションが見つかりません")
+      let retryCount = 0
+      const maxRetries = 5
+      const baseDelay = 300 // 300ms
+
+      const attemptFetch = async (): Promise<boolean> => {
+        try {
+          const response = await fetch(`/api/session/${sessionId}`)
+          if (response.ok) {
+            const data = await response.json()
+            setSessionInfo(data)
+            return true
+          } else if (response.status === 404) {
+            // セッションが見つからない場合はリトライ
+            if (retryCount < maxRetries) {
+              retryCount++
+              const delay = baseDelay * Math.pow(2, retryCount - 1) // 指数バックオフ
+              await new Promise((resolve) => setTimeout(resolve, delay))
+              return attemptFetch()
+            } else {
+              setError("セッションが見つかりません")
+              return false
+            }
+          }
+        } catch (err) {
+          // ネットワークエラーの場合もリトライ
+          if (retryCount < maxRetries) {
+            retryCount++
+            const delay = baseDelay * Math.pow(2, retryCount - 1)
+            await new Promise((resolve) => setTimeout(resolve, delay))
+            return attemptFetch()
+          } else {
+            setError("セッション情報を取得できませんでした")
+            return false
+          }
         }
-      } catch (err) {
-        setError("セッション情報を取得できませんでした")
-      } finally {
-        setLoadingSession(false)
+        return false
       }
+
+      await attemptFetch()
+      setLoadingSession(false)
     }
 
     if (sessionId) {
