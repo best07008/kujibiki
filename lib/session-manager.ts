@@ -55,9 +55,38 @@ export function createSession(participantCount: number): string {
   return sessionId
 }
 
-export function getSession(sessionId: string): Session | null {
+export async function getSession(sessionId: string): Promise<Session | null> {
   const sessions = getSessions()
-  return sessions.get(sessionId) || null
+  let session = sessions.get(sessionId)
+
+  // If not in memory, try to load from KV
+  if (!session) {
+    try {
+      const sessionData = await kvStore.get(`session:${sessionId}`)
+      if (sessionData) {
+        // Deserialize and restore to memory
+        session = deserializeSession(sessionData)
+        sessions.set(sessionId, session)
+      }
+    } catch (err) {
+      console.error(`[SessionManager] Failed to load session ${sessionId} from KV:`, err)
+    }
+  }
+
+  return session || null
+}
+
+function deserializeSession(data: any): Session {
+  return {
+    id: data.id,
+    participantCount: data.participantCount,
+    participants: new Map(data.participants),
+    started: data.started,
+    results: new Map(data.results),
+    selectedPositions: new Set(data.selectedPositions),
+    createdAt: new Date(data.createdAt),
+    updatedAt: new Date(data.updatedAt),
+  }
 }
 
 export function joinSession(sessionId: string, name: string, position: number): { success: false; code: string } | { success: true; participantId: string } {

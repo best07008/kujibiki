@@ -1,4 +1,4 @@
-import { joinSession } from "@/lib/session-manager"
+import { joinSession, getSession } from "@/lib/session-manager"
 import { NextRequest, NextResponse } from "next/server"
 
 export async function POST(
@@ -22,6 +22,9 @@ export async function POST(
         { status: 400 }
       )
     }
+
+    // Ensure session is loaded from KV before joining
+    await getSession(sessionId)
 
     const result = joinSession(sessionId, name.trim(), position)
 

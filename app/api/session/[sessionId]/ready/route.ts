@@ -1,4 +1,4 @@
-import { markParticipantReady } from "@/lib/session-manager"
+import { markParticipantReady, getSession } from "@/lib/session-manager"
 import { NextRequest, NextResponse } from "next/server"
 
 export async function POST(
@@ -15,6 +15,9 @@ export async function POST(
         { status: 400 }
       )
     }
+
+    // Ensure session is loaded from KV before marking ready
+    await getSession(sessionId)
 
     const success = markParticipantReady(sessionId, participantId)
 
