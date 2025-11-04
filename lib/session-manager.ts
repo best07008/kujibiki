@@ -1,5 +1,4 @@
 import { getSessions, getSubscribers } from "./sessions"
-import { kvStore } from "./kv-store"
 
 export interface Participant {
   id: string
@@ -46,40 +45,13 @@ export function createSession(participantCount: number): string {
   sessions.set(sessionId, session)
   subscribers.set(sessionId, new Set())
 
-  // Persist to KV store (async, don't wait)
-  persistSession(sessionId, session).catch(err =>
-    console.error(`[SessionManager] Failed to persist session ${sessionId}:`, err)
-  )
-
   console.log(`[SessionManager] Created session: ${sessionId}`)
   return sessionId
 }
 
-export async function getSession(sessionId: string): Promise<Session | null> {
+export function getSession(sessionId: string): Session | null {
   const sessions = getSessions()
-  let session = sessions.get(sessionId)
-  console.log(`[SessionManager.getSession] Memory lookup for ${sessionId}:`, !!session)
-
-  // If not in memory, try to load from KV
-  if (!session) {
-    try {
-      console.log(`[SessionManager.getSession] Loading from KV for ${sessionId}`)
-      const sessionData = await kvStore.get(`session:${sessionId}`)
-      console.log(`[SessionManager.getSession] KV data:`, !!sessionData)
-      if (sessionData) {
-        // Deserialize and restore to memory
-        session = deserializeSession(sessionData)
-        sessions.set(sessionId, session)
-        console.log(`[SessionManager.getSession] Deserialized and cached session for ${sessionId}`)
-      } else {
-        console.log(`[SessionManager.getSession] No data in KV for ${sessionId}`)
-      }
-    } catch (err) {
-      console.error(`[SessionManager] Failed to load session ${sessionId} from KV:`, err)
-    }
-  }
-
-  return session || null
+  return sessions.get(sessionId) || null
 }
 
 function deserializeSession(data: any): Session {
@@ -136,11 +108,6 @@ export function joinSession(sessionId: string, name: string, position: number): 
   session.updatedAt = new Date()
   console.log(`[SessionManager] Participant joined - sessionId: ${sessionId}, participantId: ${participantId}, name: ${name}, position: ${position}`)
 
-  // Persist to KV store (async, don't wait)
-  persistSession(sessionId, session).catch(err =>
-    console.error(`[SessionManager] Failed to persist session after join:`, err)
-  )
-
   notifySubscribers(sessionId, "participant-joined", {
     participantId,
     participant,
@@ -160,11 +127,6 @@ export function markParticipantReady(sessionId: string, participantId: string): 
 
   participant.ready = true
   session.updatedAt = new Date()
-
-  // Persist to KV store (async, don't wait)
-  persistSession(sessionId, session).catch(err =>
-    console.error(`[SessionManager] Failed to persist session after marking ready:`, err)
-  )
 
   notifySubscribers(sessionId, "participant-ready", {
     participantId,
@@ -209,11 +171,6 @@ export function startSession(sessionId: string): boolean {
     session.results.set(participant.id, result)
     participant.result = result
   })
-
-  // Persist to KV store (async, don't wait)
-  persistSession(sessionId, session).catch(err =>
-    console.error(`[SessionManager] Failed to persist session after start:`, err)
-  )
 
   notifySubscribers(sessionId, "session-started", {
     results: Object.fromEntries(session.results),
@@ -280,39 +237,6 @@ function shuffleArray<T>(array: T[]): T[] {
   return result
 }
 
-// Helper function to convert Session to serializable format
-function sessionToSerializable(session: Session) {
-  return {
-    id: session.id,
-    participantCount: session.participantCount,
-    participants: Array.from(session.participants.entries()).map(([id, p]) => [
-      id,
-      p,
-    ]),
-    started: session.started,
-    results: Array.from(session.results.entries()),
-    selectedPositions: Array.from(session.selectedPositions),
-    createdAt: session.createdAt.toISOString(),
-    updatedAt: session.updatedAt.toISOString(),
-  }
-}
-
-// Persist session to KV store (24 hour TTL)
-async function persistSession(sessionId: string, session: Session) {
-  try {
-    const serialized = sessionToSerializable(session)
-    await kvStore.set(`session:${sessionId}`, serialized, { ex: 86400 })
-  } catch (err) {
-    console.error(`[SessionManager] Failed to persist session ${sessionId}:`, err)
-  }
-}
-
-// Restore all sessions from KV store to memory on startup
-export async function restoreSessionsFromKV() {
-  // This would require storing a list of session IDs in KV
-  // For now, we rely on creating new sessions and persisting them
-  console.log('[SessionManager] Sessions will be persisted to KV on creation/update')
-}
 
 // セッションクリーンアップ（1時間以上更新がなければ削除）
 if (typeof global !== 'undefined' && !global.__cleanupInterval) {

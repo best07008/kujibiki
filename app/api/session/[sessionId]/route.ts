@@ -6,13 +6,9 @@ export async function GET(
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   const { sessionId } = await params
-  console.log(`[GetSession API] Fetching session: ${sessionId}`)
-
-  const session = await getSession(sessionId)
-  console.log(`[GetSession API] Session found:`, !!session)
+  const session = getSession(sessionId)
 
   if (!session) {
-    console.log(`[GetSession API] Session not found for ID: ${sessionId}`)
     return NextResponse.json(
       { error: "Session not found" },
       { status: 404 }

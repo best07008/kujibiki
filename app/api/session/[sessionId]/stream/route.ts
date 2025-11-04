@@ -6,7 +6,7 @@ export async function GET(
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   const { sessionId } = await params
-  const session = await getSession(sessionId)
+  const session = getSession(sessionId)
 
   if (!session) {
     return NextResponse.json(

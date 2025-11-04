@@ -23,9 +23,6 @@ export async function POST(
       )
     }
 
-    // Ensure session is loaded from KV before joining
-    await getSession(sessionId)
-
     const result = joinSession(sessionId, name.trim(), position)
 
     if (!result.success) {

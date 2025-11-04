@@ -8,9 +8,6 @@ export async function POST(
   try {
     const { sessionId } = await params
 
-    // Ensure session is loaded from KV before starting
-    await getSession(sessionId)
-
     const success = startSession(sessionId)
 
     if (!success) {

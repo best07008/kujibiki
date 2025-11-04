@@ -16,9 +16,6 @@ export async function POST(
       )
     }
 
-    // Ensure session is loaded from KV before marking ready
-    await getSession(sessionId)
-
     const success = markParticipantReady(sessionId, participantId)
 
     if (!success) {
