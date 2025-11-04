@@ -62,7 +62,6 @@ export function getSession(sessionId: string): Session | null {
 
 export function joinSession(sessionId: string, name: string, position: number): { success: false; code: string } | { success: true; participantId: string } {
   const sessions = getSessions()
-  const subscribers = getSubscribers()
 
   const session = sessions.get(sessionId)
   console.log(`[SessionManager] Join attempt - sessionId: ${sessionId}, exists: ${!!session}, position: ${position}`)
