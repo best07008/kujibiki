@@ -262,20 +262,6 @@ function sessionToSerializable(session: Session) {
   }
 }
 
-// Helper function to convert serialized data back to Session
-function deserializeSession(data: any): Session {
-  return {
-    id: data.id,
-    participantCount: data.participantCount,
-    participants: new Map(data.participants),
-    started: data.started,
-    results: new Map(data.results),
-    selectedPositions: new Set(data.selectedPositions),
-    createdAt: new Date(data.createdAt),
-    updatedAt: new Date(data.updatedAt),
-  }
-}
-
 // Persist session to KV store (24 hour TTL)
 async function persistSession(sessionId: string, session: Session) {
   try {
