@@ -213,12 +213,34 @@ export default function OrganizerSessionPage() {
 
   console.log("[render] allReady:", allReady, "startLoading:", startLoading, "started:", session.started, "buttonDisabled:", !allReady || startLoading)
 
+  const participantUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}/participant?sessionId=${session.id}`
+    : ''
+
   return (
     <main className="min-h-screen bg-gradient-to-b from-blue-50 to-indigo-100 p-8">
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">司会者ダッシュボード</h1>
           <p className="text-gray-600">セッションID: {session.id}</p>
+        </div>
+
+        {/* 参加者シェアURL */}
+        <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-6 mb-8">
+          <h3 className="text-lg font-semibold text-gray-900 mb-3">参加者へシェア</h3>
+          <p className="text-sm text-gray-600 mb-3">このURLを参加者に共有してください</p>
+          <div className="bg-white p-4 rounded border border-blue-200 mb-4">
+            <p className="text-sm font-mono text-blue-600 break-all">{participantUrl}</p>
+          </div>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(participantUrl)
+              alert("URLをコピーしました")
+            }}
+            className="w-full bg-blue-600 text-white py-2 rounded font-semibold hover:bg-blue-700 transition"
+          >
+            URLをコピー
+          </button>
         </div>
 
         {error && (
