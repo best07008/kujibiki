@@ -117,11 +117,13 @@ function getKVStore(): KVStoreInterface {
   // Check if we're in Vercel production environment
   if (process.env.VERCEL === '1') {
     console.log('[KVStore] Using Vercel KV in production')
+    console.log('[KVStore] KV_URL available:', !!process.env.KV_URL)
     return new VercelKVStore()
   }
 
   // Use in-memory store for development
   console.log('[KVStore] Using in-memory store for development')
+  console.log('[KVStore] VERCEL env var:', process.env.VERCEL)
   if (typeof global !== 'undefined' && !global.__inMemoryKVStore) {
     global.__inMemoryKVStore = new InMemoryKVStore()
   }
