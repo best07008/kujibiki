@@ -54,18 +54,6 @@ export function getSession(sessionId: string): Session | null {
   return sessions.get(sessionId) || null
 }
 
-function deserializeSession(data: any): Session {
-  return {
-    id: data.id,
-    participantCount: data.participantCount,
-    participants: new Map(data.participants),
-    started: data.started,
-    results: new Map(data.results),
-    selectedPositions: new Set(data.selectedPositions),
-    createdAt: new Date(data.createdAt),
-    updatedAt: new Date(data.updatedAt),
-  }
-}
 
 export function joinSession(sessionId: string, name: string, position: number): { success: false; code: string } | { success: true; participantId: string } {
   const sessions = getSessions()
