@@ -116,7 +116,6 @@ export function joinSession(sessionId: string, name: string, position: number): 
 
 export function markParticipantReady(sessionId: string, participantId: string): boolean {
   const sessions = getSessions()
-  const subscribers = getSubscribers()
 
   const session = sessions.get(sessionId)
   if (!session) return false
@@ -154,7 +153,6 @@ export function areAllParticipantsReady(sessionId: string): boolean {
 
 export function startSession(sessionId: string): boolean {
   const sessions = getSessions()
-  const subscribers = getSubscribers()
 
   const session = sessions.get(sessionId)
   if (!session || session.started) return false
