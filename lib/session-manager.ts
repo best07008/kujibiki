@@ -167,7 +167,7 @@ export function startSession(sessionId: string): boolean {
   // ランダムにくじ結果を割り振る
   const labels = generateLabels(session.participantCount)
   const shuffledLabels = shuffleArray([...labels])
-  const participants = Array.from(session.participants.values())
+  const participants = Array.from(session.participants.values()) as Participant[]
 
   participants.forEach((participant, index) => {
     const result = shuffledLabels[index]
