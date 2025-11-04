@@ -286,18 +286,6 @@ async function persistSession(sessionId: string, session: Session) {
   }
 }
 
-// Load session from KV store if not in memory
-async function loadSessionFromKV(sessionId: string): Promise<Session | null> {
-  try {
-    const data = await kvStore.get(`session:${sessionId}`)
-    if (!data) return null
-    return deserializeSession(data)
-  } catch (err) {
-    console.error(`[SessionManager] Failed to load session ${sessionId}:`, err)
-    return null
-  }
-}
-
 // Restore all sessions from KV store to memory on startup
 export async function restoreSessionsFromKV() {
   // This would require storing a list of session IDs in KV
