@@ -58,15 +58,21 @@ export function createSession(participantCount: number): string {
 export async function getSession(sessionId: string): Promise<Session | null> {
   const sessions = getSessions()
   let session = sessions.get(sessionId)
+  console.log(`[SessionManager.getSession] Memory lookup for ${sessionId}:`, !!session)
 
   // If not in memory, try to load from KV
   if (!session) {
     try {
+      console.log(`[SessionManager.getSession] Loading from KV for ${sessionId}`)
       const sessionData = await kvStore.get(`session:${sessionId}`)
+      console.log(`[SessionManager.getSession] KV data:`, !!sessionData)
       if (sessionData) {
         // Deserialize and restore to memory
         session = deserializeSession(sessionData)
         sessions.set(sessionId, session)
+        console.log(`[SessionManager.getSession] Deserialized and cached session for ${sessionId}`)
+      } else {
+        console.log(`[SessionManager.getSession] No data in KV for ${sessionId}`)
       }
     } catch (err) {
       console.error(`[SessionManager] Failed to load session ${sessionId} from KV:`, err)
