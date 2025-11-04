@@ -30,7 +30,6 @@ export default function ParticipantSessionPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [markingReady, setMarkingReady] = useState(false)
-  const [autoReadyDone, setAutoReadyDone] = useState(false)
 
   useEffect(() => {
     let isMounted = true
@@ -130,34 +129,8 @@ export default function ParticipantSessionPage() {
     }
   }
 
-  // ページロード完了時に自動的に準備完了にする
-  useEffect(() => {
-    const markReady = async () => {
-      if (!loading && !ready && !autoReadyDone && !markingReady) {
-        setAutoReadyDone(true)
-        setMarkingReady(true)
-        try {
-          const response = await fetch(`/api/session/${sessionId}/ready`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ participantId }),
-          })
-
-          if (response.ok) {
-            setReady(true)
-          } else {
-            setError("準備完了に失敗しました")
-          }
-        } catch (err) {
-          setError(err instanceof Error ? err.message : "エラーが発生しました")
-        } finally {
-          setMarkingReady(false)
-        }
-      }
-    }
-
-    markReady()
-  }, [loading, ready, autoReadyDone, sessionId, participantId])
+  // Auto mark ready removed - user must click button manually
+  // This allows better error handling and user control
 
   if (loading) {
     return (
