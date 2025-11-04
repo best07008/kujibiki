@@ -151,8 +151,7 @@ export default function ParticipantSessionPage() {
           } else {
             const errorData = await response.json()
             console.error(`[AutoReady] Error response:`, errorData)
-            setError("準備完了に失敗しました")
-            // Retry after 2 seconds
+            // Retry after 2 seconds (don't show error to user)
             setTimeout(() => {
               setAutoReadyDone(false)
               setMarkingReady(false)
@@ -160,8 +159,7 @@ export default function ParticipantSessionPage() {
           }
         } catch (err) {
           console.error(`[AutoReady] Catch error:`, err)
-          setError(err instanceof Error ? err.message : "エラーが発生しました")
-          // Retry after 2 seconds
+          // Retry after 2 seconds (don't show error to user)
           setTimeout(() => {
             setAutoReadyDone(false)
             setMarkingReady(false)
