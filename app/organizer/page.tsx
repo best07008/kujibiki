@@ -5,6 +5,7 @@ import Link from "next/link"
 
 export default function OrganizerPage() {
   const [participantCount, setParticipantCount] = useState(10)
+  const [title, setTitle] = useState("")
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -18,7 +19,7 @@ export default function OrganizerPage() {
       const response = await fetch("/api/session/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ participantCount }),
+        body: JSON.stringify({ participantCount, title }),
       })
 
       if (!response.ok) {
@@ -93,6 +94,20 @@ export default function OrganizerPage() {
         </div>
 
         <div className="bg-white rounded-lg shadow-lg p-8">
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              タイトル（任意）
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="例：1日目、朝の部、マルシェA枠"
+              className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="text-sm text-gray-600 mt-1">くじびきを識別しやすくするためのタイトルを入力できます</p>
+          </div>
+
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               参加者数: <span className="text-2xl font-bold text-blue-600">{participantCount}</span>

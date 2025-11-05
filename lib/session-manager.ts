@@ -17,6 +17,7 @@ export interface Participant {
 
 export interface Session {
   id: string
+  title: string // セッションのタイトル（例：「1日目」「朝の部」など）
   participantCount: number
   participants: Map<string, Participant>
   started: boolean
@@ -35,12 +36,13 @@ function generateParticipantId(): string {
   return Math.random().toString(36).substring(2, 10)
 }
 
-export function createSession(participantCount: number): string {
+export function createSession(participantCount: number, title: string = ""): string {
   const subscribers = getSubscribers()
 
   const sessionId = generateSessionId()
   const session: Session = {
     id: sessionId,
+    title: title || `セッション ${sessionId}`, // タイトルが空の場合はデフォルト
     participantCount,
     participants: new Map(),
     started: false,

@@ -39,6 +39,7 @@ export async function saveSessionToKV(session: Session): Promise<boolean> {
 
     const data = {
       id: session.id,
+      title: session.title,
       participantCount: session.participantCount,
       participants: Array.from(session.participants.entries()),
       started: session.started,
@@ -86,6 +87,7 @@ export async function loadSessionFromKV(sessionId: string): Promise<Session | nu
 
     const session: Session = {
       id: data.id,
+      title: data.title || `セッション ${data.id}`, // 既存のセッションにtitleがない場合はデフォルト
       participantCount: data.participantCount,
       participants: new Map(data.participants),
       started: data.started,

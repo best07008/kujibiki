@@ -14,6 +14,7 @@ interface Participant {
 
 interface SessionState {
   id: string
+  title: string
   participantCount: number
   started: boolean
   participants: Participant[]
@@ -282,7 +283,7 @@ export default function ParticipantSessionPage() {
     <main className="min-h-screen bg-gradient-to-b from-green-50 to-emerald-100 p-8">
       <div className="max-w-2xl mx-auto">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">参加者ページ</h1>
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">{session.title}</h1>
           <p className="text-gray-600">ようこそ、{participant.name}さん</p>
         </div>
 

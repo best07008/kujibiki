@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 export async function POST(request: NextRequest) {
   try {
-    const { participantCount } = await request.json()
+    const { participantCount, title } = await request.json()
 
     if (!participantCount || participantCount < 1 || participantCount > 100) {
       return NextResponse.json(
@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const sessionId = createSession(participantCount)
+    const sessionId = createSession(participantCount, title || "")
     return NextResponse.json({ sessionId })
   } catch (error) {
     console.error("Error creating session:", error)

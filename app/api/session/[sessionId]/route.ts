@@ -22,6 +22,7 @@ export async function GET(
 
   return NextResponse.json({
     id: session.id,
+    title: session.title,
     participantCount: session.participantCount,
     started: session.started,
     participants: Array.from(session.participants.values()).map((p) => ({

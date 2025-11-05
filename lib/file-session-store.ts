@@ -20,6 +20,7 @@ export function saveSession(session: Session): void {
     ensureDir()
     const data = {
       id: session.id,
+      title: session.title,
       participantCount: session.participantCount,
       participants: Array.from(session.participants.entries()),
       started: session.started,
@@ -44,6 +45,7 @@ export function loadSession(sessionId: string): Session | null {
     const data = JSON.parse(fs.readFileSync(filePath, "utf-8"))
     return {
       id: data.id,
+      title: data.title || `セッション ${data.id}`, // 既存のセッションにtitleがない場合はデフォルト
       participantCount: data.participantCount,
       participants: new Map(data.participants),
       started: data.started,
