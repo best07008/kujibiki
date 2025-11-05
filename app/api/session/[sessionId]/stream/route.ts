@@ -8,7 +8,7 @@ export async function GET(
   const { sessionId } = await params
   console.log(`[Stream] EventSource requested for session: ${sessionId}`)
 
-  const session = getSession(sessionId)
+  const session = await getSession(sessionId)
 
   if (!session) {
     console.error(`[Stream] Session not found: ${sessionId}`)

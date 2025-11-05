@@ -1,4 +1,4 @@
-import { startSession } from "@/lib/session-manager"
+import { startSession, getSession } from "@/lib/session-manager"
 import { NextRequest, NextResponse } from "next/server"
 
 export async function POST(
@@ -7,6 +7,9 @@ export async function POST(
 ) {
   try {
     const { sessionId } = await params
+
+    // セッションがメモリにない場合、KVから読み込む
+    await getSession(sessionId)
 
     const success = startSession(sessionId)
 

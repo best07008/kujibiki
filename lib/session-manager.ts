@@ -1,5 +1,11 @@
 import { getSessions, getSubscribers } from "./sessions"
-import { saveSession, loadSession, cleanupExpiredSessions } from "./file-session-store"
+import { saveSession as saveSessionToFile, loadSession as loadSessionFromFile, cleanupExpiredSessions } from "./file-session-store"
+import {
+  saveSessionToKV,
+  loadSessionFromKV,
+  deleteSessionFromKV,
+  addSessionToList,
+} from "./kv-session-store"
 
 export interface Participant {
   id: string
@@ -46,14 +52,14 @@ export function createSession(participantCount: number): string {
   sessions.set(sessionId, session)
   subscribers.set(sessionId, new Set())
 
-  // ファイルに保存
+  // KVとファイルの両方に保存（フォールバック用）
   saveSession(session)
 
   console.log(`[SessionManager] Created session: ${sessionId}`)
   return sessionId
 }
 
-export function getSession(sessionId: string): Session | null {
+export async function getSession(sessionId: string): Promise<Session | null> {
   const sessions = getSessions()
   const subscribers = getSubscribers()
 
@@ -63,13 +69,20 @@ export function getSession(sessionId: string): Session | null {
     return session
   }
 
-  // メモリにない場合、ファイルから読み込む
-  console.log(`[SessionManager] Loading session from file: ${sessionId}`)
-  session = loadSession(sessionId)
+  // メモリにない場合、KVから読み込む
+  console.log(`[SessionManager] Loading session from KV: ${sessionId}`)
+  session = await loadSessionFromKV(sessionId)
+
+  // KVにもない場合、ファイルから読み込む（フォールバック）
+  if (!session) {
+    console.log(`[SessionManager] Loading session from file: ${sessionId}`)
+    session = loadSessionFromFile(sessionId)
+  }
+
   if (session) {
     // メモリにキャッシュ
     sessions.set(sessionId, session)
-    console.log(`[SessionManager] Session loaded from file and cached: ${sessionId}`)
+    console.log(`[SessionManager] Session loaded and cached: ${sessionId}`)
 
     // サブスクライバーセットも確実に作成
     if (!subscribers.has(sessionId)) {
@@ -77,17 +90,48 @@ export function getSession(sessionId: string): Session | null {
       console.log(`[SessionManager] Subscriber set created for session: ${sessionId}`)
     }
   } else {
-    console.log(`[SessionManager] Session not found in memory or file: ${sessionId}`)
+    console.log(`[SessionManager] Session not found: ${sessionId}`)
   }
 
   return session || null
 }
 
+// 同期版のgetSession（後方互換性のため）
+export function getSessionSync(sessionId: string): Session | null {
+  const sessions = getSessions()
+  return sessions.get(sessionId) || null
+}
+
+// セッション保存のヘルパー関数（非同期）
+async function saveSessionAsync(session: Session): Promise<void> {
+  try {
+    // KVに保存を試みる
+    const kvSaved = await saveSessionToKV(session)
+    if (kvSaved) {
+      await addSessionToList(session.id)
+      console.log(`[SessionManager] Session saved to KV: ${session.id}`)
+    } else {
+      console.log(`[SessionManager] KV unavailable, falling back to file storage`)
+    }
+    // フォールバックとしてファイルにも保存
+    saveSessionToFile(session)
+  } catch (error) {
+    console.error(`[SessionManager] Error in saveSessionAsync:`, error)
+    // エラーが発生してもファイルには保存を試みる
+    saveSessionToFile(session)
+  }
+}
+
+// セッション保存の同期ラッパー（fire and forget）
+function saveSession(session: Session): void {
+  saveSessionAsync(session).catch((error) => {
+    console.error(`[SessionManager] Background save failed:`, error)
+  })
+}
+
 
 export function joinSession(sessionId: string, name: string, position: number): { success: false; code: string } | { success: true; participantId: string } {
-  const sessions = getSessions()
-
-  const session = sessions.get(sessionId)
+  const session = getSessionSync(sessionId)
   console.log(`[SessionManager] Join attempt - sessionId: ${sessionId}, exists: ${!!session}, position: ${position}`)
   if (!session || session.started) {
     console.log(`[SessionManager] Join failed - session not found or already started`)
@@ -135,9 +179,7 @@ export function joinSession(sessionId: string, name: string, position: number): 
 }
 
 export function markParticipantReady(sessionId: string, participantId: string): boolean {
-  const sessions = getSessions()
-
-  const session = sessions.get(sessionId)
+  const session = getSessionSync(sessionId)
   if (!session) return false
 
   const participant = session.participants.get(participantId)
@@ -155,9 +197,7 @@ export function markParticipantReady(sessionId: string, participantId: string): 
 }
 
 export function areAllParticipantsReady(sessionId: string): boolean {
-  const sessions = getSessions()
-
-  const session = sessions.get(sessionId)
+  const session = getSessionSync(sessionId)
   if (!session) return false
 
   if (session.participants.size !== session.participantCount) {
@@ -168,9 +208,7 @@ export function areAllParticipantsReady(sessionId: string): boolean {
 }
 
 export function startSession(sessionId: string): boolean {
-  const sessions = getSessions()
-
-  const session = sessions.get(sessionId)
+  const session = getSessionSync(sessionId)
   if (!session || session.started) return false
 
   if (!areAllParticipantsReady(sessionId)) {
@@ -259,23 +297,31 @@ function shuffleArray<T>(array: T[]): T[] {
 }
 
 
-// セッションクリーンアップ（1時間以上更新がなければ削除）
+// セッションクリーンアップ（2時間以上更新がなければ削除）
+// KVのTTLと同期させる
 if (typeof global !== 'undefined' && !global.__cleanupInterval) {
   global.__cleanupInterval = setInterval(() => {
     const sessions = getSessions()
     const subscribers = getSubscribers()
     const now = new Date()
+    const maxAge = 7200000 // 2時間（KV_SESSION_TTLと同じ）
+
     for (const [sessionId, session] of sessions.entries()) {
-      if (now.getTime() - session.updatedAt.getTime() > 3600000) {
-        console.log(`[SessionManager] Cleaning up expired session: ${sessionId}`)
+      if (now.getTime() - session.updatedAt.getTime() > maxAge) {
+        console.log(`[SessionManager] Cleaning up expired session from memory: ${sessionId}`)
         sessions.delete(sessionId)
         subscribers.delete(sessionId)
-        // ファイルも削除
+
+        // KVとファイルからも削除
         deleteSessionFile(sessionId)
+        deleteSessionFromKV(sessionId).catch((error) => {
+          console.error(`[SessionManager] Error deleting session from KV: ${sessionId}`, error)
+        })
       }
     }
+
     // ファイルベースのセッションもクリーンアップ
-    cleanupExpiredSessions(3600000)
+    cleanupExpiredSessions(maxAge)
   }, 300000) // 5分ごとにチェック
 }
 

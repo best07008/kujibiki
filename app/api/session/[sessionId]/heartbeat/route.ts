@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/session-manager"
-import { saveSession } from "@/lib/file-session-store"
+import { saveSession as saveSessionToFile } from "@/lib/file-session-store"
+import { saveSessionToKV, refreshSessionTTL } from "@/lib/kv-session-store"
 import { NextRequest, NextResponse } from "next/server"
 
 export async function POST(
@@ -8,7 +9,7 @@ export async function POST(
 ) {
   try {
     const { sessionId } = await params
-    const session = getSession(sessionId)
+    const session = await getSession(sessionId)
 
     if (!session) {
       // セッションが見つからない場合も 200 OK で返す（クライアントに404で再試行させない）
@@ -22,7 +23,17 @@ export async function POST(
 
     // セッションの updatedAt を更新してクリーンアップ対象から除外
     session.updatedAt = new Date()
-    saveSession(session)
+
+    // KVのTTLを更新（より効率的）
+    const kvRefreshed = await refreshSessionTTL(sessionId)
+    if (kvRefreshed) {
+      console.log(`[Heartbeat] KV TTL refreshed for session: ${sessionId}`)
+    } else {
+      // KVが利用できない場合は完全に保存し直す
+      await saveSessionToKV(session)
+      saveSessionToFile(session)
+      console.log(`[Heartbeat] Session saved for: ${sessionId}`)
+    }
 
     return NextResponse.json({
       success: true,

@@ -8,7 +8,7 @@ export async function GET(
   const { sessionId } = await params
   console.log(`[SessionAPI] GET /api/session/${sessionId}`)
 
-  const session = getSession(sessionId)
+  const session = await getSession(sessionId)
 
   if (!session) {
     console.error(`[SessionAPI] Session not found: ${sessionId}`)
