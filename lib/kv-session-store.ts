@@ -141,8 +141,9 @@ export async function getAllSessionKeys(): Promise<string[]> {
   try {
     // Vercel KVはRedisベースだが、scanコマンドが制限されている場合がある
     // そのため、別途セッションIDリストをKVで管理する方法を推奨
+    // Vercel KVは配列も自動的にデシリアライズするため、JSON.parse()不要
     const sessionList = await kv.get("session_list")
-    return sessionList ? JSON.parse(sessionList as string) : []
+    return sessionList || []
   } catch (error) {
     console.error("[KVSessionStore] Error getting session keys:", error)
     return []
@@ -159,7 +160,8 @@ export async function addSessionToList(sessionId: string): Promise<void> {
     const sessionList = await getAllSessionKeys()
     if (!sessionList.includes(sessionId)) {
       sessionList.push(sessionId)
-      await kv.set("session_list", JSON.stringify(sessionList))
+      // Vercel KVは配列も自動的にシリアライズするため、JSON.stringify()不要
+      await kv.set("session_list", sessionList)
     }
   } catch (error) {
     console.error("[KVSessionStore] Error adding session to list:", error)
@@ -175,7 +177,8 @@ export async function removeSessionFromList(sessionId: string): Promise<void> {
   try {
     const sessionList = await getAllSessionKeys()
     const filtered = sessionList.filter((id) => id !== sessionId)
-    await kv.set("session_list", JSON.stringify(filtered))
+    // Vercel KVは配列も自動的にシリアライズするため、JSON.stringify()不要
+    await kv.set("session_list", filtered)
   } catch (error) {
     console.error("[KVSessionStore] Error removing session from list:", error)
   }
