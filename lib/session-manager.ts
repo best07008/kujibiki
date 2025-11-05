@@ -1,4 +1,5 @@
 import { getSessions, getSubscribers } from "./sessions"
+import { saveSession, loadSession } from "./file-session-store"
 
 export interface Participant {
   id: string
@@ -45,13 +46,35 @@ export function createSession(participantCount: number): string {
   sessions.set(sessionId, session)
   subscribers.set(sessionId, new Set())
 
+  // ファイルに保存
+  saveSession(session)
+
   console.log(`[SessionManager] Created session: ${sessionId}`)
   return sessionId
 }
 
 export function getSession(sessionId: string): Session | null {
   const sessions = getSessions()
-  return sessions.get(sessionId) || null
+
+  // まずメモリから取得
+  let session = sessions.get(sessionId)
+  if (session) {
+    return session
+  }
+
+  // メモリにない場合、ファイルから読み込む
+  session = loadSession(sessionId)
+  if (session) {
+    // メモリにキャッシュ
+    sessions.set(sessionId, session)
+    // サブスクライバーセットも作成
+    const subscribers = getSubscribers()
+    if (!subscribers.has(sessionId)) {
+      subscribers.set(sessionId, new Set())
+    }
+  }
+
+  return session || null
 }
 
 
@@ -94,6 +117,7 @@ export function joinSession(sessionId: string, name: string, position: number): 
   session.participants.set(participantId, participant)
   session.selectedPositions.add(position) // 番号を追跡
   session.updatedAt = new Date()
+  saveSession(session)
   console.log(`[SessionManager] Participant joined - sessionId: ${sessionId}, participantId: ${participantId}, name: ${name}, position: ${position}`)
 
   notifySubscribers(sessionId, "participant-joined", {
@@ -115,6 +139,7 @@ export function markParticipantReady(sessionId: string, participantId: string): 
 
   participant.ready = true
   session.updatedAt = new Date()
+  saveSession(session)
 
   notifySubscribers(sessionId, "participant-ready", {
     participantId,
@@ -159,6 +184,8 @@ export function startSession(sessionId: string): boolean {
     session.results.set(participant.id, result)
     participant.result = result
   })
+
+  saveSession(session)
 
   notifySubscribers(sessionId, "session-started", {
     results: Object.fromEntries(session.results),

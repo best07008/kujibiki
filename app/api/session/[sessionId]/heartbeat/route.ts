@@ -1,4 +1,5 @@
 import { getSession } from "@/lib/session-manager"
+import { saveSession } from "@/lib/file-session-store"
 import { NextRequest, NextResponse } from "next/server"
 
 export async function POST(
@@ -10,14 +11,18 @@ export async function POST(
     const session = getSession(sessionId)
 
     if (!session) {
-      return NextResponse.json(
-        { error: "Session not found" },
-        { status: 404 }
-      )
+      // セッションが見つからない場合も 200 OK で返す（クライアントに404で再試行させない）
+      console.warn(`[Heartbeat] Session not found: ${sessionId}`)
+      return NextResponse.json({
+        success: false,
+        sessionId,
+        message: "Session not found",
+      })
     }
 
     // セッションの updatedAt を更新してクリーンアップ対象から除外
     session.updatedAt = new Date()
+    saveSession(session)
 
     return NextResponse.json({
       success: true,
@@ -26,9 +31,9 @@ export async function POST(
     })
   } catch (error) {
     console.error("Error in heartbeat:", error)
-    return NextResponse.json(
-      { error: "Failed to process heartbeat" },
-      { status: 500 }
-    )
+    return NextResponse.json({
+      success: false,
+      error: "Failed to process heartbeat",
+    })
   }
 }
