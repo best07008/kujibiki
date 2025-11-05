@@ -27,6 +27,7 @@ export function saveSession(session: Session): void {
       selectedPositions: Array.from(session.selectedPositions),
       createdAt: session.createdAt.toISOString(),
       updatedAt: session.updatedAt.toISOString(),
+      version: session.version,
     }
     fs.writeFileSync(getSessionPath(session.id), JSON.stringify(data, null, 2))
   } catch (error) {
@@ -50,6 +51,7 @@ export function loadSession(sessionId: string): Session | null {
       selectedPositions: new Set(data.selectedPositions),
       createdAt: new Date(data.createdAt),
       updatedAt: new Date(data.updatedAt),
+      version: data.version || 0, // 既存のセッションにversionがない場合は0
     }
   } catch (error) {
     console.error(`[FileSessionStore] Error loading session ${sessionId}:`, error)

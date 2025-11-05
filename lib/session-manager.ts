@@ -24,6 +24,7 @@ export interface Session {
   selectedPositions: Set<number> // 選ばれた番号を追跡
   createdAt: Date
   updatedAt: Date
+  version: number // 楽観的ロック用バージョン番号
 }
 
 function generateSessionId(): string {
@@ -47,6 +48,7 @@ export function createSession(participantCount: number): string {
     selectedPositions: new Set(),
     createdAt: new Date(),
     updatedAt: new Date(),
+    version: 0,
   }
 
   // メモリキャッシュは使用せず、KVのみに保存
@@ -96,23 +98,30 @@ export function getSessionSync(sessionId: string): Session | null {
 }
 
 // セッション保存のヘルパー関数（非同期）
-async function saveSessionAsync(session: Session): Promise<void> {
+// 戻り値: 成功時はtrue、競合検出時はfalse
+async function saveSessionAsync(session: Session): Promise<boolean> {
   console.log(`[SessionManager] saveSessionAsync called - sessionId: ${session.id}, participants: ${session.participants.size}`)
   try {
-    // KVに保存を試みる
+    // KVに保存を試みる（楽観的ロック）
     const kvSaved = await saveSessionToKV(session)
     if (kvSaved) {
       await addSessionToList(session.id)
       console.log(`[SessionManager] Session saved to KV successfully: ${session.id}, participants: ${session.participants.size}`)
+      // フォールバックとしてファイルにも保存
+      saveSessionToFile(session)
+      return true
     } else {
-      console.warn(`[SessionManager] KV save failed or unavailable for session: ${session.id}, falling back to file storage`)
+      // 競合検出またはKV利用不可
+      console.warn(`[SessionManager] KV save failed (conflict or unavailable) for session: ${session.id}`)
+      // KV利用不可の場合はファイルに保存
+      saveSessionToFile(session)
+      return false
     }
-    // フォールバックとしてファイルにも保存
-    saveSessionToFile(session)
   } catch (error) {
     console.error(`[SessionManager] Error in saveSessionAsync for session ${session.id}:`, error)
     // エラーが発生してもファイルには保存を試みる
     saveSessionToFile(session)
+    return false
   }
 }
 
@@ -125,80 +134,121 @@ function saveSession(session: Session): void {
 
 
 export async function joinSession(sessionId: string, name: string, position: number): Promise<{ success: false; code: string } | { success: true; participantId: string }> {
-  // 常にKVから最新の状態を読み込む（競合状態を防ぐ）
-  const session = await getSession(sessionId)
-  console.log(`[SessionManager] Join attempt - sessionId: ${sessionId}, exists: ${!!session}, position: ${position}`)
+  // 楽観的ロックのリトライロジック
+  const maxRetries = 5
+  const baseDelay = 50 // 50ms
 
-  if (session) {
-    console.log(`[SessionManager] Session loaded - participants: ${session.participants.size}, selectedPositions: ${Array.from(session.selectedPositions).join(',')}`)
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    if (attempt > 0) {
+      // リトライ前に少し待機（指数バックオフ）
+      const delay = baseDelay * Math.pow(2, attempt - 1)
+      console.log(`[SessionManager] Join retry ${attempt}/${maxRetries} after ${delay}ms - sessionId: ${sessionId}`)
+      await new Promise(resolve => setTimeout(resolve, delay))
+    }
+
+    // 常にKVから最新の状態を読み込む（競合状態を防ぐ）
+    const session = await getSession(sessionId)
+    console.log(`[SessionManager] Join attempt ${attempt + 1}/${maxRetries} - sessionId: ${sessionId}, exists: ${!!session}, position: ${position}`)
+
+    if (session) {
+      console.log(`[SessionManager] Session loaded - participants: ${session.participants.size}, selectedPositions: ${Array.from(session.selectedPositions).join(',')}, version: ${session.version}`)
+    }
+
+    if (!session || session.started) {
+      console.log(`[SessionManager] Join failed - session not found or already started`)
+      return { success: false, code: "SESSION_NOT_FOUND" }
+    }
+
+    // 参加者数の上限チェック
+    if (session.participants.size >= session.participantCount) {
+      console.log(`[SessionManager] Join failed - participant limit reached (${session.participantCount})`)
+      return { success: false, code: "PARTICIPANT_LIMIT_REACHED" }
+    }
+
+    // 番号の範囲と整数チェック（1..participantCount）
+    if (!Number.isInteger(position) || position < 1 || position > session.participantCount) {
+      console.log(`[SessionManager] Join failed - position ${position} out of range`)
+      return { success: false, code: "INVALID_POSITION" }
+    }
+
+    // 番号が既に選ばれている場合はエラー
+    if (session.selectedPositions.has(position)) {
+      console.log(`[SessionManager] Join failed - position ${position} already selected`)
+      return { success: false, code: "POSITION_ALREADY_TAKEN" }
+    }
+
+    const participantId = generateParticipantId()
+    const participant: Participant = {
+      id: participantId,
+      name,
+      position,
+      ready: false,
+    }
+
+    session.participants.set(participantId, participant)
+    session.selectedPositions.add(position) // 番号を追跡
+    session.updatedAt = new Date()
+
+    console.log(`[SessionManager] Before save - sessionId: ${sessionId}, participants: ${session.participants.size}, selectedPositions: ${Array.from(session.selectedPositions).join(',')}, version: ${session.version}`)
+
+    // すぐにKVに保存（楽観的ロック）
+    const saved = await saveSessionAsync(session)
+
+    if (saved) {
+      // 保存成功
+      console.log(`[SessionManager] Participant joined and saved - sessionId: ${sessionId}, participantId: ${participantId}, name: ${name}, position: ${position}, total participants: ${session.participants.size}`)
+
+      notifySubscribers(sessionId, "participant-joined", {
+        participantId,
+        participant,
+      })
+
+      return { success: true, participantId }
+    } else {
+      // 競合検出 - リトライ
+      console.warn(`[SessionManager] Version conflict detected for session ${sessionId}, retrying...`)
+    }
   }
 
-  if (!session || session.started) {
-    console.log(`[SessionManager] Join failed - session not found or already started`)
-    return { success: false, code: "SESSION_NOT_FOUND" }
-  }
-
-  // 参加者数の上限チェック
-  if (session.participants.size >= session.participantCount) {
-    console.log(`[SessionManager] Join failed - participant limit reached (${session.participantCount})`)
-    return { success: false, code: "PARTICIPANT_LIMIT_REACHED" }
-  }
-
-  // 番号の範囲と整数チェック（1..participantCount）
-  if (!Number.isInteger(position) || position < 1 || position > session.participantCount) {
-    console.log(`[SessionManager] Join failed - position ${position} out of range`)
-    return { success: false, code: "INVALID_POSITION" }
-  }
-
-  // 番号が既に選ばれている場合はエラー
-  if (session.selectedPositions.has(position)) {
-    console.log(`[SessionManager] Join failed - position ${position} already selected`)
-    return { success: false, code: "POSITION_ALREADY_TAKEN" }
-  }
-
-  const participantId = generateParticipantId()
-  const participant: Participant = {
-    id: participantId,
-    name,
-    position,
-    ready: false,
-  }
-
-  session.participants.set(participantId, participant)
-  session.selectedPositions.add(position) // 番号を追跡
-  session.updatedAt = new Date()
-
-  console.log(`[SessionManager] Before save - sessionId: ${sessionId}, participants: ${session.participants.size}, selectedPositions: ${Array.from(session.selectedPositions).join(',')}`)
-
-  // すぐにKVに保存して競合を最小化
-  await saveSessionAsync(session)
-  console.log(`[SessionManager] Participant joined and saved - sessionId: ${sessionId}, participantId: ${participantId}, name: ${name}, position: ${position}, total participants: ${session.participants.size}`)
-
-  notifySubscribers(sessionId, "participant-joined", {
-    participantId,
-    participant,
-  })
-
-  return { success: true, participantId }
+  // 最大リトライ回数に達した
+  console.error(`[SessionManager] Join failed after ${maxRetries} retries - sessionId: ${sessionId}`)
+  return { success: false, code: "CONFLICT_MAX_RETRIES" }
 }
 
 export async function markParticipantReady(sessionId: string, participantId: string): Promise<boolean> {
-  // 常にKVから最新の状態を読み込む
-  const session = await getSession(sessionId)
-  if (!session) return false
+  // 楽観的ロックのリトライロジック
+  const maxRetries = 5
+  const baseDelay = 50
 
-  const participant = session.participants.get(participantId)
-  if (!participant) return false
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    if (attempt > 0) {
+      const delay = baseDelay * Math.pow(2, attempt - 1)
+      await new Promise(resolve => setTimeout(resolve, delay))
+    }
 
-  participant.ready = true
-  session.updatedAt = new Date()
-  await saveSessionAsync(session)
+    // 常にKVから最新の状態を読み込む
+    const session = await getSession(sessionId)
+    if (!session) return false
 
-  notifySubscribers(sessionId, "participant-ready", {
-    participantId,
-  })
+    const participant = session.participants.get(participantId)
+    if (!participant) return false
 
-  return true
+    participant.ready = true
+    session.updatedAt = new Date()
+
+    const saved = await saveSessionAsync(session)
+    if (saved) {
+      notifySubscribers(sessionId, "participant-ready", {
+        participantId,
+      })
+      return true
+    }
+
+    console.warn(`[SessionManager] markParticipantReady conflict, retrying...`)
+  }
+
+  console.error(`[SessionManager] markParticipantReady failed after retries`)
+  return false
 }
 
 export async function areAllParticipantsReady(sessionId: string): Promise<boolean> {
@@ -213,34 +263,50 @@ export async function areAllParticipantsReady(sessionId: string): Promise<boolea
 }
 
 export async function startSession(sessionId: string): Promise<boolean> {
-  const session = await getSession(sessionId)
-  if (!session || session.started) return false
+  // 楽観的ロックのリトライロジック
+  const maxRetries = 5
+  const baseDelay = 50
 
-  if (!(await areAllParticipantsReady(sessionId))) {
-    return false
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    if (attempt > 0) {
+      const delay = baseDelay * Math.pow(2, attempt - 1)
+      await new Promise(resolve => setTimeout(resolve, delay))
+    }
+
+    const session = await getSession(sessionId)
+    if (!session || session.started) return false
+
+    if (!(await areAllParticipantsReady(sessionId))) {
+      return false
+    }
+
+    session.started = true
+    session.updatedAt = new Date()
+
+    // ランダムにくじ結果を割り振る
+    const labels = generateLabels(session.participantCount)
+    const shuffledLabels = shuffleArray([...labels])
+    const participants = Array.from(session.participants.values()) as Participant[]
+
+    participants.forEach((participant, index) => {
+      const result = shuffledLabels[index]
+      session.results.set(participant.id, result)
+      participant.result = result
+    })
+
+    const saved = await saveSessionAsync(session)
+    if (saved) {
+      notifySubscribers(sessionId, "session-started", {
+        results: Object.fromEntries(session.results),
+      })
+      return true
+    }
+
+    console.warn(`[SessionManager] startSession conflict, retrying...`)
   }
 
-  session.started = true
-  session.updatedAt = new Date()
-
-  // ランダムにくじ結果を割り振る
-  const labels = generateLabels(session.participantCount)
-  const shuffledLabels = shuffleArray([...labels])
-  const participants = Array.from(session.participants.values()) as Participant[]
-
-  participants.forEach((participant, index) => {
-    const result = shuffledLabels[index]
-    session.results.set(participant.id, result)
-    participant.result = result
-  })
-
-  await saveSessionAsync(session)
-
-  notifySubscribers(sessionId, "session-started", {
-    results: Object.fromEntries(session.results),
-  })
-
-  return true
+  console.error(`[SessionManager] startSession failed after retries`)
+  return false
 }
 
 export function subscribe(sessionId: string, callback: (data: string) => void): () => void {

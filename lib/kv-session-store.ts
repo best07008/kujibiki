@@ -23,6 +23,20 @@ export async function saveSessionToKV(session: Session): Promise<boolean> {
   }
 
   try {
+    // 楽観的ロック: 保存前に現在のversionをチェック
+    const currentData = await kv.get(`${SESSION_PREFIX}${session.id}`)
+
+    if (currentData) {
+      // セッションが既に存在する場合、versionをチェック
+      if (currentData.version !== session.version) {
+        console.warn(`[KVSessionStore] Version conflict for session ${session.id}: expected ${session.version}, got ${currentData.version}`)
+        return false // 競合検出
+      }
+    }
+
+    // versionをインクリメント
+    const newVersion = session.version + 1
+
     const data = {
       id: session.id,
       participantCount: session.participantCount,
@@ -32,9 +46,10 @@ export async function saveSessionToKV(session: Session): Promise<boolean> {
       selectedPositions: Array.from(session.selectedPositions),
       createdAt: session.createdAt.toISOString(),
       updatedAt: session.updatedAt.toISOString(),
+      version: newVersion,
     }
 
-    console.log(`[KVSessionStore] Saving session to KV: ${session.id}, participants count: ${data.participants.length}`)
+    console.log(`[KVSessionStore] Saving session to KV: ${session.id}, participants: ${data.participants.length}, version: ${session.version} -> ${newVersion}`)
 
     // Vercel KVは自動的にJSONシリアライズするため、JSON.stringify()不要
     await kv.set(`${SESSION_PREFIX}${session.id}`, data, {
@@ -78,6 +93,7 @@ export async function loadSessionFromKV(sessionId: string): Promise<Session | nu
       selectedPositions: new Set(data.selectedPositions),
       createdAt: new Date(data.createdAt),
       updatedAt: new Date(data.updatedAt),
+      version: data.version || 0, // 既存のセッションにversionがない場合は0
     }
 
     console.log(`[KVSessionStore] Loaded session from KV: ${sessionId}, participants: ${session.participants.size}, selectedPositions: ${Array.from(session.selectedPositions).join(',')}`)
