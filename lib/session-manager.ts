@@ -1,5 +1,5 @@
 import { getSessions, getSubscribers } from "./sessions"
-import { saveSession, loadSession } from "./file-session-store"
+import { saveSession, loadSession, cleanupExpiredSessions } from "./file-session-store"
 
 export interface Participant {
   id: string
@@ -267,9 +267,28 @@ if (typeof global !== 'undefined' && !global.__cleanupInterval) {
     const now = new Date()
     for (const [sessionId, session] of sessions.entries()) {
       if (now.getTime() - session.updatedAt.getTime() > 3600000) {
+        console.log(`[SessionManager] Cleaning up expired session: ${sessionId}`)
         sessions.delete(sessionId)
         subscribers.delete(sessionId)
+        // ファイルも削除
+        deleteSessionFile(sessionId)
       }
     }
+    // ファイルベースのセッションもクリーンアップ
+    cleanupExpiredSessions(3600000)
   }, 300000) // 5分ごとにチェック
+}
+
+function deleteSessionFile(sessionId: string): void {
+  try {
+    const fs = require("fs")
+    const path = require("path")
+    const filePath = path.join(process.cwd(), ".sessions", `${sessionId}.json`)
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath)
+      console.log(`[SessionManager] Deleted session file: ${sessionId}`)
+    }
+  } catch (error) {
+    console.error(`[SessionManager] Error deleting session file ${sessionId}:`, error)
+  }
 }
