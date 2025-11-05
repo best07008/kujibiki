@@ -35,6 +35,23 @@ export default function ParticipantSessionPage() {
   useEffect(() => {
     let isMounted = true
     let eventSource: EventSource | null = null
+    let reconnectAttempts = 0
+    const maxReconnectAttempts = 5
+    let heartbeatInterval: NodeJS.Timeout | null = null
+
+    const sendHeartbeat = async () => {
+      try {
+        const response = await fetch(`/api/session/${sessionId}/heartbeat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        })
+        if (!response.ok) {
+          console.warn("Heartbeat failed:", response.status)
+        }
+      } catch (err) {
+        console.error("Heartbeat error:", err)
+      }
+    }
 
     const setupEventSource = () => {
       eventSource = new EventSource(`/api/session/${sessionId}/stream`)
@@ -73,21 +90,51 @@ export default function ParticipantSessionPage() {
       }
 
       eventSource.onerror = () => {
-        console.error("EventSource error")
-        if (eventSource) eventSource.close()
+        console.error("EventSource error, attempting to reconnect...")
+        if (eventSource) {
+          eventSource.close()
+          eventSource = null
+        }
+
+        if (isMounted && reconnectAttempts < maxReconnectAttempts) {
+          reconnectAttempts++
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 30000)
+          console.log(`Reconnecting EventSource in ${delay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`)
+          setTimeout(() => {
+            if (isMounted) setupEventSource()
+          }, delay)
+        } else if (reconnectAttempts >= maxReconnectAttempts) {
+          console.error("Max reconnect attempts reached")
+          setError("セッションへの接続が失われました。ページをリロードしてください。")
+        }
+      }
+    }
+
+    const initializeSession = async () => {
+      try {
+        await fetchSessionState()
+        if (isMounted) {
+          reconnectAttempts = 0
+          setupEventSource()
+
+          // ハートビートを30秒ごとに送信してセッションを生存させる
+          heartbeatInterval = setInterval(sendHeartbeat, 30000)
+        }
+      } catch (err) {
+        console.error("Failed to initialize session:", err)
+        if (isMounted) {
+          setError("セッション情報の取得に失敗しました")
+        }
       }
     }
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    fetchSessionState().then(() => {
-      if (isMounted) {
-        setupEventSource()
-      }
-    })
+    initializeSession()
 
     return () => {
       isMounted = false
       if (eventSource) eventSource.close()
+      if (heartbeatInterval) clearInterval(heartbeatInterval)
     }
   }, [sessionId, participantId])
 
@@ -95,15 +142,27 @@ export default function ParticipantSessionPage() {
     try {
       const response = await fetch(`/api/session/${sessionId}`)
       if (!response.ok) {
-        throw new Error("Failed to fetch session")
+        if (response.status === 404) {
+          throw new Error("セッションが見つかりません。セッションIDを確認してください。")
+        } else if (response.status === 500) {
+          throw new Error("サーバーエラーが発生しました。しばらく待ってからリロードしてください。")
+        } else {
+          throw new Error(`セッション取得エラー (ステータス: ${response.status})`)
+        }
       }
       const data = await response.json()
       setSession(data)
       const p = data.participants.find((p: Participant) => p.id === participantId)
+      if (!p) {
+        throw new Error("あなたの参加者情報が見つかりません。")
+      }
       setParticipant(p)
       if (p) setReady(p.ready)
+      setError(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error")
+      const errorMsg = err instanceof Error ? err.message : "不明なエラーが発生しました"
+      setError(errorMsg)
+      console.error("Fetch session state error:", errorMsg)
     } finally {
       setLoading(false)
     }
@@ -121,10 +180,22 @@ export default function ParticipantSessionPage() {
       })
 
       if (!response.ok) {
-        throw new Error("Failed to mark as ready")
+        const data = await response.json().catch(() => ({}))
+        if (response.status === 404) {
+          throw new Error("セッションが見つかりません。")
+        } else if (response.status === 400) {
+          throw new Error(data.error || "準備完了の処理に失敗しました。")
+        } else if (response.status === 500) {
+          throw new Error("サーバーエラーが発生しました。")
+        } else {
+          throw new Error(`準備完了エラー (ステータス: ${response.status})`)
+        }
       }
+      setError(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error")
+      const errorMsg = err instanceof Error ? err.message : "準備完了に失敗しました"
+      setError(errorMsg)
+      console.error("Mark ready error:", errorMsg)
     } finally {
       setMarkingReady(false)
     }
@@ -148,9 +219,10 @@ export default function ParticipantSessionPage() {
 
           if (response.ok) {
             setReady(true)
+            console.log(`[AutoReady] Successfully marked ready`)
           } else {
-            const errorData = await response.json()
-            console.error(`[AutoReady] Error response:`, errorData)
+            const errorData = await response.json().catch(() => ({}))
+            console.error(`[AutoReady] Error response (${response.status}):`, errorData)
             // Retry after 2 seconds (don't show error to user)
             setTimeout(() => {
               setAutoReadyDone(false)
@@ -183,14 +255,29 @@ export default function ParticipantSessionPage() {
     )
   }
 
+  const handleRetry = async () => {
+    setError(null)
+    setLoading(true)
+    await fetchSessionState()
+  }
+
   if (!participant || !session) {
     return (
       <main className="min-h-screen bg-gradient-to-b from-green-50 to-emerald-100 p-8">
         <div className="text-center">
-          <p className="text-red-600">{error || "参加者情報が見つかりません"}</p>
-          <Link href="/" className="text-blue-600 hover:underline mt-4">
-            ホームに戻る
-          </Link>
+          <p className="text-red-600 mb-4 text-lg font-semibold">セッションエラー</p>
+          <p className="text-gray-700 mb-6">{error || "参加者情報が見つかりません"}</p>
+          <div className="flex gap-4 justify-center">
+            <button
+              onClick={handleRetry}
+              className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 transition"
+            >
+              リトライ
+            </button>
+            <Link href="/" className="bg-gray-600 text-white px-6 py-2 rounded hover:bg-gray-700 transition">
+              ホームに戻る
+            </Link>
+          </div>
         </div>
       </main>
     )
@@ -205,8 +292,15 @@ export default function ParticipantSessionPage() {
         </div>
 
         {error && (
-          <div className="bg-red-100 text-red-700 p-4 rounded mb-6">
-            {error}
+          <div className="bg-red-100 border-2 border-red-400 text-red-700 p-4 rounded mb-6">
+            <p className="font-semibold mb-2">エラーが発生しました</p>
+            <p className="mb-4">{error}</p>
+            <button
+              onClick={handleRetry}
+              className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition"
+            >
+              リトライ
+            </button>
           </div>
         )}
 
@@ -238,7 +332,7 @@ export default function ParticipantSessionPage() {
 
           {ready && !session.started && (
             <div className="bg-green-100 text-green-700 p-4 rounded font-semibold text-center">
-              準備完了！司会者がスタートするのを待っています...
+              準備完了！開催者がスタートするのを待っています...
             </div>
           )}
 

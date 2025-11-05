@@ -11,7 +11,7 @@ export default function Home() {
             href="/organizer"
             className="inline-block px-8 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition"
           >
-            司会者として始める
+            開催者として始める
           </Link>
           <Link
             href="/participant"

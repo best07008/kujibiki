@@ -65,6 +65,23 @@ export default function OrganizerSessionPage() {
   useEffect(() => {
     let isMounted = true
     let eventSource: EventSource | null = null
+    let heartbeatInterval: NodeJS.Timeout | null = null
+    let reconnectAttempts = 0
+    const maxReconnectAttempts = 5
+
+    const sendHeartbeat = async () => {
+      try {
+        const response = await fetch(`/api/session/${sessionId}/heartbeat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        })
+        if (!response.ok) {
+          console.warn("Organizer heartbeat failed:", response.status)
+        }
+      } catch (err) {
+        console.error("Organizer heartbeat error:", err)
+      }
+    }
 
     const setupEventSource = () => {
       eventSource = new EventSource(`/api/session/${sessionId}/stream`)
@@ -113,21 +130,51 @@ export default function OrganizerSessionPage() {
       }
 
       eventSource.onerror = () => {
-        console.error("EventSource error")
-        if (eventSource) eventSource.close()
+        console.error("EventSource error, attempting to reconnect...")
+        if (eventSource) {
+          eventSource.close()
+          eventSource = null
+        }
+
+        if (isMounted && reconnectAttempts < maxReconnectAttempts) {
+          reconnectAttempts++
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 30000)
+          console.log(`Organizer reconnecting EventSource in ${delay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`)
+          setTimeout(() => {
+            if (isMounted) setupEventSource()
+          }, delay)
+        } else if (reconnectAttempts >= maxReconnectAttempts) {
+          console.error("Max reconnect attempts reached")
+          setError("セッションへの接続が失われました。ページをリロードしてください。")
+        }
+      }
+    }
+
+    const initializeSession = async () => {
+      try {
+        await fetchSessionState()
+        if (isMounted) {
+          reconnectAttempts = 0
+          setupEventSource()
+
+          // ハートビートを30秒ごとに送信してセッションを生存させる
+          heartbeatInterval = setInterval(sendHeartbeat, 30000)
+        }
+      } catch (err) {
+        console.error("Failed to initialize session:", err)
+        if (isMounted) {
+          setError("セッション情報の取得に失敗しました")
+        }
       }
     }
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    fetchSessionState().then(() => {
-      if (isMounted) {
-        setupEventSource()
-      }
-    })
+    initializeSession()
 
     return () => {
       isMounted = false
       if (eventSource) eventSource.close()
+      if (heartbeatInterval) clearInterval(heartbeatInterval)
     }
   }, [sessionId])
 
@@ -221,7 +268,7 @@ export default function OrganizerSessionPage() {
     <main className="min-h-screen bg-gradient-to-b from-blue-50 to-indigo-100 p-8">
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">司会者ダッシュボード</h1>
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">開催者ダッシュボード</h1>
           <p className="text-gray-600">セッションID: {session.id}</p>
         </div>
 

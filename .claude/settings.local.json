@@ -18,7 +18,8 @@
       "Bash(xargs kill:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push)"
+      "Bash(git push)",
+      "Bash(git log:*)"
     ],
     "deny": [],
     "ask": []
