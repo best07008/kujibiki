@@ -35,7 +35,6 @@ function generateParticipantId(): string {
 }
 
 export function createSession(participantCount: number): string {
-  const sessions = getSessions()
   const subscribers = getSubscribers()
 
   const sessionId = generateSessionId()
@@ -49,7 +48,9 @@ export function createSession(participantCount: number): string {
     createdAt: new Date(),
     updatedAt: new Date(),
   }
-  sessions.set(sessionId, session)
+
+  // メモリキャッシュは使用せず、KVのみに保存
+  // サブスクライバーセットのみメモリに作成
   subscribers.set(sessionId, new Set())
 
   // KVとファイルの両方に保存（フォールバック用）
@@ -60,18 +61,12 @@ export function createSession(participantCount: number): string {
 }
 
 export async function getSession(sessionId: string): Promise<Session | null> {
-  const sessions = getSessions()
   const subscribers = getSubscribers()
 
-  // まずメモリから取得
-  let session = sessions.get(sessionId)
-  if (session) {
-    return session
-  }
-
-  // メモリにない場合、KVから読み込む
-  console.log(`[SessionManager] Loading session from KV: ${sessionId}`)
-  session = await loadSessionFromKV(sessionId)
+  // Vercelサーバーレス環境では各リクエストが異なるインスタンスで処理されるため
+  // メモリキャッシュは無効化し、常にKVから最新の状態を読み込む
+  console.log(`[SessionManager] Loading session from KV (no cache): ${sessionId}`)
+  let session = await loadSessionFromKV(sessionId)
 
   // KVにもない場合、ファイルから読み込む（フォールバック）
   if (!session) {
@@ -80,9 +75,7 @@ export async function getSession(sessionId: string): Promise<Session | null> {
   }
 
   if (session) {
-    // メモリにキャッシュ
-    sessions.set(sessionId, session)
-    console.log(`[SessionManager] Session loaded and cached: ${sessionId}, participants: ${session.participants.size}, selectedPositions: ${Array.from(session.selectedPositions).join(',')}`)
+    console.log(`[SessionManager] Session loaded: ${sessionId}, participants: ${session.participants.size}, selectedPositions: ${Array.from(session.selectedPositions).join(',')}`)
 
     // サブスクライバーセットも確実に作成
     if (!subscribers.has(sessionId)) {
