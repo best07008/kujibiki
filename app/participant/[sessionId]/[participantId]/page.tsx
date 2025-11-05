@@ -327,7 +327,7 @@ export default function ParticipantSessionPage() {
 
           {ready && !session.started && (
             <div className="bg-green-100 text-green-700 p-4 rounded font-semibold text-center">
-              準備完了！開催者がスタートするのを待っています...
+              準備が完了しました。くじの完了後、結果をお知らせいたします。
             </div>
           )}
 
