@@ -193,7 +193,7 @@ function ParticipantPageContent() {
               <p className="text-xs text-gray-600 mb-3">1 ～ {maxPosition} の番号から選んでください</p>
 
               {/* ボタングリッド表示 */}
-              <div className="grid grid-cols-5 gap-2 mb-6">
+              <div className="grid grid-cols-5 gap-2 mb-4">
                 {Array.from({ length: maxPosition }, (_, i) => i + 1).map((num) => {
                   const isSelected = sessionInfo?.selectedPositions?.includes(num) || false
                   const isCurrentlySelected = position === num
@@ -222,25 +222,10 @@ function ParticipantPageContent() {
                   )
                 })}
               </div>
-
-              {/* フォールバック用スライダー */}
-              {maxPosition > 20 && (
-                <>
-                  <p className="text-xs text-gray-500 mb-2">または</p>
-                  <input
-                    type="range"
-                    min="1"
-                    max={maxPosition}
-                    value={position}
-                    onChange={(e) => setPosition(parseInt(e.target.value))}
-                    className="w-full"
-                  />
-                </>
-              )}
             </div>
 
             {error && (
-              <div className="bg-red-100 text-red-700 p-4 rounded">
+              <div className="bg-red-100 text-red-700 p-4 rounded mb-4">
                 {error}
               </div>
             )}
@@ -248,7 +233,7 @@ function ParticipantPageContent() {
             <button
               type="submit"
               disabled={loading || !name.trim()}
-              className="w-full bg-green-600 text-white py-3 rounded font-semibold hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-green-600 text-white py-4 rounded-lg font-bold text-lg hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
             >
               {loading ? "参加中..." : "参加する"}
             </button>
