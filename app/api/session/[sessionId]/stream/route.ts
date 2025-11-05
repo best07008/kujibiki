@@ -29,6 +29,7 @@ export async function GET(
         event: "session-state",
         data: {
           id: session.id,
+          title: session.title,
           participantCount: session.participantCount,
           participants: Array.from(session.participants.values()).map((p) => ({
             id: p.id,
