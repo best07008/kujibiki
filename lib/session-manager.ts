@@ -55,6 +55,7 @@ export function createSession(participantCount: number): string {
 
 export function getSession(sessionId: string): Session | null {
   const sessions = getSessions()
+  const subscribers = getSubscribers()
 
   // まずメモリから取得
   let session = sessions.get(sessionId)
@@ -63,15 +64,20 @@ export function getSession(sessionId: string): Session | null {
   }
 
   // メモリにない場合、ファイルから読み込む
+  console.log(`[SessionManager] Loading session from file: ${sessionId}`)
   session = loadSession(sessionId)
   if (session) {
     // メモリにキャッシュ
     sessions.set(sessionId, session)
-    // サブスクライバーセットも作成
-    const subscribers = getSubscribers()
+    console.log(`[SessionManager] Session loaded from file and cached: ${sessionId}`)
+
+    // サブスクライバーセットも確実に作成
     if (!subscribers.has(sessionId)) {
       subscribers.set(sessionId, new Set())
+      console.log(`[SessionManager] Subscriber set created for session: ${sessionId}`)
     }
+  } else {
+    console.log(`[SessionManager] Session not found in memory or file: ${sessionId}`)
   }
 
   return session || null

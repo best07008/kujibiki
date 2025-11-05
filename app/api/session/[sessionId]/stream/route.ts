@@ -6,14 +6,19 @@ export async function GET(
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   const { sessionId } = await params
+  console.log(`[Stream] EventSource requested for session: ${sessionId}`)
+
   const session = getSession(sessionId)
 
   if (!session) {
+    console.error(`[Stream] Session not found: ${sessionId}`)
     return NextResponse.json(
       { error: "Session not found" },
       { status: 404 }
     )
   }
+
+  console.log(`[Stream] Session found, starting EventSource for: ${sessionId}`)
 
   // Server-Sent Eventsのストリームをセットアップ
   const encoder = new TextEncoder()
