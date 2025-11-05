@@ -17,7 +17,10 @@ const SESSION_TTL = 7200 // 2時間（秒単位）
  * KVにセッションを保存
  */
 export async function saveSessionToKV(session: Session): Promise<boolean> {
-  if (!kv) return false
+  if (!kv) {
+    console.log(`[KVSessionStore] KV is not available (kv is null)`)
+    return false
+  }
 
   try {
     const data = {
@@ -31,12 +34,14 @@ export async function saveSessionToKV(session: Session): Promise<boolean> {
       updatedAt: session.updatedAt.toISOString(),
     }
 
+    console.log(`[KVSessionStore] Saving session to KV: ${session.id}, participants count: ${data.participants.length}`)
+
     // Vercel KVは自動的にJSONシリアライズするため、JSON.stringify()不要
     await kv.set(`${SESSION_PREFIX}${session.id}`, data, {
       ex: SESSION_TTL,
     })
 
-    console.log(`[KVSessionStore] Saved session to KV: ${session.id}`)
+    console.log(`[KVSessionStore] Successfully saved session to KV: ${session.id}`)
     return true
   } catch (error) {
     console.error(`[KVSessionStore] Error saving session ${session.id}:`, error)
@@ -48,15 +53,21 @@ export async function saveSessionToKV(session: Session): Promise<boolean> {
  * KVからセッションを読み込み
  */
 export async function loadSessionFromKV(sessionId: string): Promise<Session | null> {
-  if (!kv) return null
+  if (!kv) {
+    console.log(`[KVSessionStore] KV is not available for load (kv is null)`)
+    return null
+  }
 
   try {
+    console.log(`[KVSessionStore] Loading session from KV: ${sessionId}`)
     // Vercel KVは自動的にJSONデシリアライズするため、JSON.parse()不要
     const data = await kv.get(`${SESSION_PREFIX}${sessionId}`)
     if (!data) {
       console.log(`[KVSessionStore] Session not found in KV: ${sessionId}`)
       return null
     }
+
+    console.log(`[KVSessionStore] Raw data from KV for ${sessionId}: participants count: ${data.participants?.length || 0}`)
 
     const session: Session = {
       id: data.id,
@@ -69,7 +80,7 @@ export async function loadSessionFromKV(sessionId: string): Promise<Session | nu
       updatedAt: new Date(data.updatedAt),
     }
 
-    console.log(`[KVSessionStore] Loaded session from KV: ${sessionId}`)
+    console.log(`[KVSessionStore] Loaded session from KV: ${sessionId}, participants: ${session.participants.size}, selectedPositions: ${Array.from(session.selectedPositions).join(',')}`)
     return session
   } catch (error) {
     console.error(`[KVSessionStore] Error loading session ${sessionId}:`, error)

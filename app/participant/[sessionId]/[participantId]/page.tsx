@@ -267,17 +267,12 @@ export default function ParticipantSessionPage() {
         <div className="text-center">
           <p className="text-red-600 mb-4 text-lg font-semibold">セッションエラー</p>
           <p className="text-gray-700 mb-6">{error || "参加者情報が見つかりません"}</p>
-          <div className="flex gap-4 justify-center">
-            <button
-              onClick={handleRetry}
-              className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 transition"
-            >
-              リトライ
-            </button>
-            <Link href="/" className="bg-gray-600 text-white px-6 py-2 rounded hover:bg-gray-700 transition">
-              ホームに戻る
-            </Link>
-          </div>
+          <button
+            onClick={handleRetry}
+            className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 transition"
+          >
+            リトライ
+          </button>
         </div>
       </main>
     )

@@ -82,7 +82,7 @@ export async function getSession(sessionId: string): Promise<Session | null> {
   if (session) {
     // メモリにキャッシュ
     sessions.set(sessionId, session)
-    console.log(`[SessionManager] Session loaded and cached: ${sessionId}`)
+    console.log(`[SessionManager] Session loaded and cached: ${sessionId}, participants: ${session.participants.size}, selectedPositions: ${Array.from(session.selectedPositions).join(',')}`)
 
     // サブスクライバーセットも確実に作成
     if (!subscribers.has(sessionId)) {
@@ -104,19 +104,20 @@ export function getSessionSync(sessionId: string): Session | null {
 
 // セッション保存のヘルパー関数（非同期）
 async function saveSessionAsync(session: Session): Promise<void> {
+  console.log(`[SessionManager] saveSessionAsync called - sessionId: ${session.id}, participants: ${session.participants.size}`)
   try {
     // KVに保存を試みる
     const kvSaved = await saveSessionToKV(session)
     if (kvSaved) {
       await addSessionToList(session.id)
-      console.log(`[SessionManager] Session saved to KV: ${session.id}`)
+      console.log(`[SessionManager] Session saved to KV successfully: ${session.id}, participants: ${session.participants.size}`)
     } else {
-      console.log(`[SessionManager] KV unavailable, falling back to file storage`)
+      console.warn(`[SessionManager] KV save failed or unavailable for session: ${session.id}, falling back to file storage`)
     }
     // フォールバックとしてファイルにも保存
     saveSessionToFile(session)
   } catch (error) {
-    console.error(`[SessionManager] Error in saveSessionAsync:`, error)
+    console.error(`[SessionManager] Error in saveSessionAsync for session ${session.id}:`, error)
     // エラーが発生してもファイルには保存を試みる
     saveSessionToFile(session)
   }
@@ -134,6 +135,10 @@ export async function joinSession(sessionId: string, name: string, position: num
   // 常にKVから最新の状態を読み込む（競合状態を防ぐ）
   const session = await getSession(sessionId)
   console.log(`[SessionManager] Join attempt - sessionId: ${sessionId}, exists: ${!!session}, position: ${position}`)
+
+  if (session) {
+    console.log(`[SessionManager] Session loaded - participants: ${session.participants.size}, selectedPositions: ${Array.from(session.selectedPositions).join(',')}`)
+  }
 
   if (!session || session.started) {
     console.log(`[SessionManager] Join failed - session not found or already started`)
@@ -170,9 +175,11 @@ export async function joinSession(sessionId: string, name: string, position: num
   session.selectedPositions.add(position) // 番号を追跡
   session.updatedAt = new Date()
 
+  console.log(`[SessionManager] Before save - sessionId: ${sessionId}, participants: ${session.participants.size}, selectedPositions: ${Array.from(session.selectedPositions).join(',')}`)
+
   // すぐにKVに保存して競合を最小化
   await saveSessionAsync(session)
-  console.log(`[SessionManager] Participant joined - sessionId: ${sessionId}, participantId: ${participantId}, name: ${name}, position: ${position}`)
+  console.log(`[SessionManager] Participant joined and saved - sessionId: ${sessionId}, participantId: ${participantId}, name: ${name}, position: ${position}, total participants: ${session.participants.size}`)
 
   notifySubscribers(sessionId, "participant-joined", {
     participantId,
