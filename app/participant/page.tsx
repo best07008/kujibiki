@@ -30,11 +30,11 @@ function ParticipantPageContent() {
   }, [participantId, sessionId])
 
   useEffect(() => {
-    // セッション情報を取得（リトライロジック付き）
+    // セッション情報を取得（改善されたリトライロジック付き）
     const fetchSessionInfo = async () => {
       let retryCount = 0
-      const maxRetries = 5
-      const baseDelay = 300 // 300ms
+      const maxRetries = 8 // リトライ回数を増やす
+      const baseDelay = 500 // 500msに増やす（KVの読み込みを待つ）
 
       const attemptFetch = async (): Promise<boolean> => {
         try {
@@ -42,16 +42,30 @@ function ParticipantPageContent() {
           if (response.ok) {
             const data = await response.json()
             setSessionInfo(data)
+            setError(null) // エラーをクリア
             return true
           } else if (response.status === 404) {
             // セッションが見つからない場合はリトライ
             if (retryCount < maxRetries) {
               retryCount++
-              const delay = baseDelay * Math.pow(2, retryCount - 1) // 指数バックオフ
+              const delay = baseDelay * Math.pow(1.5, retryCount - 1) // より緩やかな増加
+              console.log(`[Participant] Retrying session fetch (${retryCount}/${maxRetries}) in ${delay}ms`)
               await new Promise((resolve) => setTimeout(resolve, delay))
               return attemptFetch()
             } else {
-              setError("セッションが見つかりません")
+              setError("セッションが見つかりません。セッションIDをご確認ください。")
+              return false
+            }
+          } else {
+            // その他のエラーもリトライ
+            if (retryCount < maxRetries) {
+              retryCount++
+              const delay = baseDelay * Math.pow(1.5, retryCount - 1)
+              console.log(`[Participant] Retrying after error ${response.status} (${retryCount}/${maxRetries})`)
+              await new Promise((resolve) => setTimeout(resolve, delay))
+              return attemptFetch()
+            } else {
+              setError(`セッション情報の取得に失敗しました（エラー: ${response.status}）`)
               return false
             }
           }
@@ -59,11 +73,12 @@ function ParticipantPageContent() {
           // ネットワークエラーの場合もリトライ
           if (retryCount < maxRetries) {
             retryCount++
-            const delay = baseDelay * Math.pow(2, retryCount - 1)
+            const delay = baseDelay * Math.pow(1.5, retryCount - 1)
+            console.log(`[Participant] Retrying after network error (${retryCount}/${maxRetries})`)
             await new Promise((resolve) => setTimeout(resolve, delay))
             return attemptFetch()
           } else {
-            setError("セッション情報を取得できませんでした")
+            setError("ネットワークエラーが発生しました。接続を確認してください。")
             return false
           }
         }
@@ -98,27 +113,56 @@ function ParticipantPageContent() {
     setLoading(true)
     setError(null)
 
-    try {
-      const response = await fetch(`/api/session/${sessionId}/join`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          position: parseInt(position.toString()),
-        }),
-      })
+    // リトライロジック付き参加処理
+    let retryCount = 0
+    const maxRetries = 3
+    const retryDelay = 1000 // 1秒
 
-      if (!response.ok) {
+    const attemptJoin = async (): Promise<boolean> => {
+      try {
+        const response = await fetch(`/api/session/${sessionId}/join`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: name.trim(),
+            position: parseInt(position.toString()),
+          }),
+        })
+
+        if (!response.ok) {
+          const data = await response.json()
+
+          // セッションが見つからない場合はリトライ
+          if (data.code === "SESSION_NOT_FOUND" && retryCount < maxRetries) {
+            retryCount++
+            console.log(`[Participant] Session not found, retrying join (${retryCount}/${maxRetries})`)
+            await new Promise((resolve) => setTimeout(resolve, retryDelay))
+            return attemptJoin()
+          }
+
+          const errorMessage = getErrorMessage(data.code)
+          throw new Error(errorMessage)
+        }
+
         const data = await response.json()
-        const errorMessage = getErrorMessage(data.code)
-        throw new Error(errorMessage)
+        setParticipantId(data.participantId)
+        return true
+      } catch (err) {
+        // ネットワークエラーの場合もリトライ
+        if (retryCount < maxRetries && (err instanceof Error && err.message.includes("Failed to fetch"))) {
+          retryCount++
+          console.log(`[Participant] Network error, retrying join (${retryCount}/${maxRetries})`)
+          await new Promise((resolve) => setTimeout(resolve, retryDelay))
+          return attemptJoin()
+        }
+        throw err
       }
+    }
 
-      const data = await response.json()
-      setParticipantId(data.participantId)
+    try {
+      await attemptJoin()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error")
-    } finally {
+      setError(err instanceof Error ? err.message : "参加に失敗しました。もう一度お試しください。")
       setLoading(false)
     }
   }
@@ -140,7 +184,11 @@ function ParticipantPageContent() {
     return (
       <main className="min-h-screen bg-gradient-to-b from-green-50 to-emerald-100 p-8">
         <div className="max-w-2xl mx-auto text-center">
-          <p className="text-gray-600">読み込み中...</p>
+          <div className="bg-white rounded-lg shadow-lg p-8">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mb-4"></div>
+            <p className="text-gray-700 font-semibold mb-2">セッション情報を読み込み中...</p>
+            <p className="text-gray-500 text-sm">少々お待ちください</p>
+          </div>
         </div>
       </main>
     )
