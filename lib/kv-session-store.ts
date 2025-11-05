@@ -31,7 +31,8 @@ export async function saveSessionToKV(session: Session): Promise<boolean> {
       updatedAt: session.updatedAt.toISOString(),
     }
 
-    await kv.set(`${SESSION_PREFIX}${session.id}`, JSON.stringify(data), {
+    // Vercel KVは自動的にJSONシリアライズするため、JSON.stringify()不要
+    await kv.set(`${SESSION_PREFIX}${session.id}`, data, {
       ex: SESSION_TTL,
     })
 
@@ -50,13 +51,13 @@ export async function loadSessionFromKV(sessionId: string): Promise<Session | nu
   if (!kv) return null
 
   try {
-    const dataStr = await kv.get(`${SESSION_PREFIX}${sessionId}`)
-    if (!dataStr) {
+    // Vercel KVは自動的にJSONデシリアライズするため、JSON.parse()不要
+    const data = await kv.get(`${SESSION_PREFIX}${sessionId}`)
+    if (!data) {
       console.log(`[KVSessionStore] Session not found in KV: ${sessionId}`)
       return null
     }
 
-    const data = JSON.parse(dataStr as string)
     const session: Session = {
       id: data.id,
       participantCount: data.participantCount,
