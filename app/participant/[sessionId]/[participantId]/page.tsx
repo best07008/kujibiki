@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useParams } from "next/navigation"
-import Link from "next/link"
 
 interface Participant {
   id: string
@@ -342,14 +341,6 @@ export default function ParticipantSessionPage() {
             </div>
           )}
         </div>
-
-        {session.started && (
-          <div className="text-center">
-            <Link href="/" className="text-blue-600 hover:underline">
-              ホームに戻る
-            </Link>
-          </div>
-        )}
       </div>
     </main>
   )
