@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 
 interface SessionInfo {
+  title: string
   participantCount: number
   selectedPositions?: number[]
 }
@@ -214,7 +215,7 @@ function ParticipantPageContent() {
     <main className="min-h-screen bg-gradient-to-b from-green-50 to-emerald-100 p-8">
       <div className="max-w-2xl mx-auto">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">参加者として参加</h1>
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">{sessionInfo?.title || "参加者として参加"}</h1>
           <p className="text-gray-600">セッションID: <span className="font-semibold">{sessionId}</span></p>
         </div>
 
