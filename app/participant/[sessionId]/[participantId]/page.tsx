@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 
@@ -31,6 +31,36 @@ export default function ParticipantSessionPage() {
   const [error, setError] = useState<string | null>(null)
   const [markingReady, setMarkingReady] = useState(false)
   const [autoReadyDone, setAutoReadyDone] = useState(false)
+
+  const fetchSessionState = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/session/${sessionId}`)
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error("セッションが見つかりません。セッションIDを確認してください。")
+        } else if (response.status === 500) {
+          throw new Error("サーバーエラーが発生しました。しばらく待ってからリロードしてください。")
+        } else {
+          throw new Error(`セッション取得エラー (ステータス: ${response.status})`)
+        }
+      }
+      const data = await response.json()
+      setSession(data)
+      const p = data.participants.find((p: Participant) => p.id === participantId)
+      if (!p) {
+        throw new Error("あなたの参加者情報が見つかりません。")
+      }
+      setParticipant(p)
+      if (p) setReady(p.ready)
+      setError(null)
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "不明なエラーが発生しました"
+      setError(errorMsg)
+      console.error("Fetch session state error:", errorMsg)
+    } finally {
+      setLoading(false)
+    }
+  }, [sessionId, participantId])
 
   useEffect(() => {
     let isMounted = true
@@ -128,7 +158,6 @@ export default function ParticipantSessionPage() {
       }
     }
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     initializeSession()
 
     return () => {
@@ -136,37 +165,8 @@ export default function ParticipantSessionPage() {
       if (eventSource) eventSource.close()
       if (heartbeatInterval) clearInterval(heartbeatInterval)
     }
-  }, [sessionId, participantId])
+  }, [sessionId, participantId, fetchSessionState])
 
-  const fetchSessionState = async () => {
-    try {
-      const response = await fetch(`/api/session/${sessionId}`)
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error("セッションが見つかりません。セッションIDを確認してください。")
-        } else if (response.status === 500) {
-          throw new Error("サーバーエラーが発生しました。しばらく待ってからリロードしてください。")
-        } else {
-          throw new Error(`セッション取得エラー (ステータス: ${response.status})`)
-        }
-      }
-      const data = await response.json()
-      setSession(data)
-      const p = data.participants.find((p: Participant) => p.id === participantId)
-      if (!p) {
-        throw new Error("あなたの参加者情報が見つかりません。")
-      }
-      setParticipant(p)
-      if (p) setReady(p.ready)
-      setError(null)
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : "不明なエラーが発生しました"
-      setError(errorMsg)
-      console.error("Fetch session state error:", errorMsg)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const handleMarkReady = async () => {
     if (ready) return
@@ -243,7 +243,7 @@ export default function ParticipantSessionPage() {
     }
 
     markReady()
-  }, [loading, ready, autoReadyDone, sessionId, participantId])
+  }, [loading, ready, autoReadyDone, sessionId, participantId, markingReady])
 
   if (loading) {
     return (

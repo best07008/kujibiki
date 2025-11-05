@@ -1,4 +1,4 @@
-import { joinSession, getSession } from "@/lib/session-manager"
+import { joinSession } from "@/lib/session-manager"
 import { NextRequest, NextResponse } from "next/server"
 
 export async function POST(
@@ -23,10 +23,8 @@ export async function POST(
       )
     }
 
-    // セッションがメモリにない場合、KVから読み込む
-    await getSession(sessionId)
-
-    const result = joinSession(sessionId, name.trim(), position)
+    // joinSession内部でKVから最新の状態を読み込むようになったので、ここでの事前読み込みは不要
+    const result = await joinSession(sessionId, name.trim(), position)
 
     if (!result.success) {
       return NextResponse.json(

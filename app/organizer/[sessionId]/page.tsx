@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 
 interface Participant {
@@ -61,6 +61,21 @@ export default function OrganizerSessionPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [startLoading, setStartLoading] = useState(false)
+
+  const fetchSessionState = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/session/${sessionId}`)
+      if (!response.ok) {
+        throw new Error("Failed to fetch session")
+      }
+      const data = await response.json()
+      setSession(data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error")
+    } finally {
+      setLoading(false)
+    }
+  }, [sessionId])
 
   useEffect(() => {
     let isMounted = true
@@ -168,7 +183,6 @@ export default function OrganizerSessionPage() {
       }
     }
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     initializeSession()
 
     return () => {
@@ -176,22 +190,7 @@ export default function OrganizerSessionPage() {
       if (eventSource) eventSource.close()
       if (heartbeatInterval) clearInterval(heartbeatInterval)
     }
-  }, [sessionId])
-
-  const fetchSessionState = async () => {
-    try {
-      const response = await fetch(`/api/session/${sessionId}`)
-      if (!response.ok) {
-        throw new Error("Failed to fetch session")
-      }
-      const data = await response.json()
-      setSession(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error")
-    } finally {
-      setLoading(false)
-    }
-  }
+  }, [sessionId, fetchSessionState])
 
   const handleStartSession = async () => {
     console.log("[handleStartSession] Button clicked for session:", sessionId)

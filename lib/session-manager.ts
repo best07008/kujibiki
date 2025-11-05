@@ -130,9 +130,11 @@ function saveSession(session: Session): void {
 }
 
 
-export function joinSession(sessionId: string, name: string, position: number): { success: false; code: string } | { success: true; participantId: string } {
-  const session = getSessionSync(sessionId)
+export async function joinSession(sessionId: string, name: string, position: number): Promise<{ success: false; code: string } | { success: true; participantId: string }> {
+  // 常にKVから最新の状態を読み込む（競合状態を防ぐ）
+  const session = await getSession(sessionId)
   console.log(`[SessionManager] Join attempt - sessionId: ${sessionId}, exists: ${!!session}, position: ${position}`)
+
   if (!session || session.started) {
     console.log(`[SessionManager] Join failed - session not found or already started`)
     return { success: false, code: "SESSION_NOT_FOUND" }
@@ -167,7 +169,9 @@ export function joinSession(sessionId: string, name: string, position: number): 
   session.participants.set(participantId, participant)
   session.selectedPositions.add(position) // 番号を追跡
   session.updatedAt = new Date()
-  saveSession(session)
+
+  // すぐにKVに保存して競合を最小化
+  await saveSessionAsync(session)
   console.log(`[SessionManager] Participant joined - sessionId: ${sessionId}, participantId: ${participantId}, name: ${name}, position: ${position}`)
 
   notifySubscribers(sessionId, "participant-joined", {
@@ -178,8 +182,9 @@ export function joinSession(sessionId: string, name: string, position: number): 
   return { success: true, participantId }
 }
 
-export function markParticipantReady(sessionId: string, participantId: string): boolean {
-  const session = getSessionSync(sessionId)
+export async function markParticipantReady(sessionId: string, participantId: string): Promise<boolean> {
+  // 常にKVから最新の状態を読み込む
+  const session = await getSession(sessionId)
   if (!session) return false
 
   const participant = session.participants.get(participantId)
@@ -187,7 +192,7 @@ export function markParticipantReady(sessionId: string, participantId: string): 
 
   participant.ready = true
   session.updatedAt = new Date()
-  saveSession(session)
+  await saveSessionAsync(session)
 
   notifySubscribers(sessionId, "participant-ready", {
     participantId,
@@ -196,8 +201,8 @@ export function markParticipantReady(sessionId: string, participantId: string): 
   return true
 }
 
-export function areAllParticipantsReady(sessionId: string): boolean {
-  const session = getSessionSync(sessionId)
+export async function areAllParticipantsReady(sessionId: string): Promise<boolean> {
+  const session = await getSession(sessionId)
   if (!session) return false
 
   if (session.participants.size !== session.participantCount) {
@@ -207,11 +212,11 @@ export function areAllParticipantsReady(sessionId: string): boolean {
   return (Array.from(session.participants.values()) as Participant[]).every((p) => p.ready)
 }
 
-export function startSession(sessionId: string): boolean {
-  const session = getSessionSync(sessionId)
+export async function startSession(sessionId: string): Promise<boolean> {
+  const session = await getSession(sessionId)
   if (!session || session.started) return false
 
-  if (!areAllParticipantsReady(sessionId)) {
+  if (!(await areAllParticipantsReady(sessionId))) {
     return false
   }
 
@@ -229,7 +234,7 @@ export function startSession(sessionId: string): boolean {
     participant.result = result
   })
 
-  saveSession(session)
+  await saveSessionAsync(session)
 
   notifySubscribers(sessionId, "session-started", {
     results: Object.fromEntries(session.results),

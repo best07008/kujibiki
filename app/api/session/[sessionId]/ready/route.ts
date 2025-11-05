@@ -1,4 +1,4 @@
-import { markParticipantReady, getSession } from "@/lib/session-manager"
+import { markParticipantReady } from "@/lib/session-manager"
 import { NextRequest, NextResponse } from "next/server"
 
 export async function POST(
@@ -16,10 +16,7 @@ export async function POST(
       )
     }
 
-    // セッションがメモリにない場合、KVから読み込む
-    await getSession(sessionId)
-
-    const success = markParticipantReady(sessionId, participantId)
+    const success = await markParticipantReady(sessionId, participantId)
 
     if (!success) {
       return NextResponse.json(
