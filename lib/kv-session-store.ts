@@ -11,7 +11,7 @@ try {
 }
 
 const SESSION_PREFIX = "session:"
-const SESSION_TTL = 7200 // 2時間（秒単位）
+const SESSION_TTL = 604800 // 7日間（秒単位）
 
 /**
  * KVにセッションを保存

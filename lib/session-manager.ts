@@ -370,14 +370,14 @@ function shuffleArray<T>(array: T[]): T[] {
 }
 
 
-// セッションクリーンアップ（2時間以上更新がなければ削除）
+// セッションクリーンアップ（7日以上更新がなければ削除）
 // KVのTTLと同期させる
 if (typeof global !== 'undefined' && !global.__cleanupInterval) {
   global.__cleanupInterval = setInterval(() => {
     const sessions = getSessions()
     const subscribers = getSubscribers()
     const now = new Date()
-    const maxAge = 7200000 // 2時間（KV_SESSION_TTLと同じ）
+    const maxAge = 604800000 // 7日間（KV_SESSION_TTLと同じ）
 
     for (const [sessionId, session] of sessions.entries()) {
       if (now.getTime() - session.updatedAt.getTime() > maxAge) {
